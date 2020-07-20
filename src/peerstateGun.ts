@@ -4,57 +4,82 @@ import {
   EncryptionFilter,
   Keychain,
   withRetries,
+  Operation,
   Action,
 } from "@peerstate/core";
-// TODO: add this to core
-import { compare } from "deep-entries";
+import { IGunChainReference } from "gun/types/chain";
 
 type InternalState<T> = {
   peerState: T;
   keys: Keychain;
 };
 
-export const peerstateGun = function <StateTreeType>(
-  authFilter: AuthFilter<StateTreeType>,
-  encryptionFilter: EncryptionFilter<StateTreeType>,
+const applyJsonPatch = function <T>(state: T, action: Operation): T {
+  // TODO: update gun chain reference with JSON patch
+  // how do we make sure this bypasses middleware?
+  return state;
+};
+const jsonPatchOperationFromGunPut = (foo: null): Operation => ({
+  path: "/void",
+  op: "add",
+  value: null,
+});
+const peerstateActionFromGunPut = (foo: null): Action => ({
+  senderToken: "sender token",
+  operationToken: '{ path: "/void", op: "add", value: null }',
+});
+
+export const peerstateGun = function <IGunChainReference>(
+  authFilter: AuthFilter<IGunChainReference>,
+  encryptionFilter: EncryptionFilter<IGunChainReference>,
   keychain: Keychain
 ) {
-  // const { nextState, sign: signWithState } = withRetries(
-  //   createPeerState(authFilter, encryptionFilter, keychain)
-  // );
-  // const [state, setState] = useState<InternalState<StateTreeType>>({
-  //   peerState: initialState,
-  //   keys: keychain,
-  // });
-  // return {
-  //   state: state.peerState,
-  //   dispatch: (a: Action | false) =>
-  //     nextState(state, a).then((s: InternalState<StateTreeType>) =>
-  //       setState(s)
-  //     ),
-  //   sign: signWithState.bind(null, state),
-  // };
   return (ctx: any) => {
     if (ctx.once) {
       return;
     }
-    ctx.on("out", function (this: { to: any }, msg: any) {
+    const { nextState, sign: signWithState } = withRetries(
+      createPeerState<IGunChainReference>(
+        authFilter,
+        encryptionFilter,
+        keychain,
+        applyJsonPatch
+      )
+    );
+    ctx.on("out", async function (this: { to: any }, msg: any) {
       var to = this.to;
-      console.log({ msg, out: "" });
+      if (msg.put) {
+        msg.put = await signWithState(
+          msg.$.back(-1),
+          jsonPatchOperationFromGunPut(msg.put)
+        );
+      } else if (msg.get) {
+        console.log(
+          "not sure what a get 'coming in' is so I'm ignoring this for now"
+        );
+      } else {
+        console.error({ msg });
+        throw new Error("something coming in I don't know about");
+      }
       // process message.
       to.next(msg); // pass to next middleware
     });
-    ctx.on("in", function (this: { to: any }, msg: any) {
+    ctx.on("in", async function (this: { to: any }, msg: any) {
       var to = this.to;
-      // const patch = compare({}, msg.put);
-      console.log({ msg, in: "" });
+      if (msg.put) {
+        msg.put = await nextState(
+          msg.$.back(-1),
+          peerstateActionFromGunPut(msg.put)
+        );
+      } else if (msg.get) {
+        console.log(
+          "not sure what a get 'coming in' is so I'm ignoring this for now"
+        );
+      } else {
+        console.error({ msg });
+        throw new Error("something coming in I don't know about");
+      }
 
-      // //that's all... no magic, no bloated framework
-      // for (var [key, value, path] of traverse(o)) {
-      //   // do something here with each key and value
-      //   console.log(key, value, path);
-      // }
-      // process message.
       to.next(msg); // pass to next middleware
     });
   };

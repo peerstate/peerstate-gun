@@ -16,15 +16,13 @@
   "files": [
     "build"
   ],
-  "dependencies": {
-    "deep-entries": "^4.0.2"
-  },
+  "dependencies": {},
   "peerDependencies": {
-    "@peerstate/core": "^0.0.5",
+    "@peerstate/core": "^0.0.7",
     "gun": "^0.2020.520"
   },
   "devDependencies": {
-    "@peerstate/core": "^0.0.5",
+    "@peerstate/core": "^0.0.8",
     "@types/gun": "^0.9.2",
     "@types/jest": "^26.0.3",
     "@types/jsonwebtoken": "^8.3.8",
